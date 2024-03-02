@@ -1,6 +1,10 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"errors"
+
+	"gorm.io/gorm"
+)
 
 type User struct {
 	ID         uint       `gorm:"primaryKey"`
@@ -15,6 +19,12 @@ type Activity struct {
 	UserID    uint   `json:"user_id"`
 	Kegiatan  string `json:"kegiatan" form:"kegiatan" validate:"required"`
 	Deskripsi string `json:"deskripsi" form:"deskripsi" validate:"required"`
+}
+
+type ActivityResponse struct {
+	ID        uint   `json:"id"`
+	Kegiatan  string `json:"kegiatan"`
+	Deskripsi string `json:"deskripsi"`
 }
 
 type UserModel struct {
@@ -88,4 +98,56 @@ func (um *UserModel) AddActivity(hp string, activity Activity) error {
 	}
 
 	return nil
+}
+
+// UpdateActivity mengubah kegiatan yang dimiliki oleh pengguna yang sedang login
+func (um *UserModel) UpdateActivity(userID uint, activityID uint, updatedActivity Activity) error {
+	// Mencari kegiatan berdasarkan ID
+	var activity Activity
+	if err := um.Connection.Where("id = ? AND user_id = ?", activityID, userID).First(&activity).Error; err != nil {
+		return err
+	}
+
+	// Memastikan kegiatan yang ingin diubah dimiliki oleh pengguna yang sedang login
+	if activity.UserID != userID {
+		return errors.New("Anda tidak memiliki izin untuk mengubah kegiatan ini")
+	}
+
+	// Memperbarui kegiatan yang ditemukan
+	if err := um.Connection.Model(&activity).Updates(&updatedActivity).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetActivitiesByHp mengambil daftar kegiatan berdasarkan nomor HP pengguna
+func (um *UserModel) GetActivitiesByHp(hp string) ([]ActivityResponse, error) {
+	var activities []Activity
+
+	// Mendapatkan pengguna berdasarkan nomor HP
+	var user User
+	if err := um.Connection.Where("hp = ?", hp).First(&user).Error; err != nil {
+		return nil, err
+	}
+
+	// Mengambil daftar kegiatan berdasarkan ID pengguna
+	if err := um.Connection.Model(&user).Association("Activities").Find(&activities); err != nil {
+		return nil, err
+	}
+
+	// Membuat slice untuk menyimpan respons kegiatan
+	var activityResponses []ActivityResponse
+
+	// Mengonversi setiap kegiatan menjadi respons kegiatan yang diinginkan
+	for _, activity := range activities {
+		activityResponse := ActivityResponse{
+			ID:        activity.ID,
+			Kegiatan:  activity.Kegiatan,
+			Deskripsi: activity.Deskripsi,
+		}
+		activityResponses = append(activityResponses, activityResponse)
+	}
+
+	return activityResponses, nil
 }

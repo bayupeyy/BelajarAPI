@@ -25,4 +25,14 @@ func InitRoute(c *echo.Echo, ctl user.UserController) {
 	c.POST("/kegiatan", ctl.AddActivity(), echojwt.WithConfig(echojwt.Config{
 		SigningKey: []byte(config.JWTSECRET),
 	}))
+
+	//Update Kegiatan
+	c.PUT("/kegiatan/:id", ctl.UpdateActivity(), echojwt.WithConfig(echojwt.Config{
+		SigningKey: []byte(config.JWTSECRET),
+	}))
+
+	//Melihat list kegiatan
+	c.GET("/kegiatan", ctl.GetAllActivities(), echojwt.WithConfig(echojwt.Config{
+		SigningKey: []byte(config.JWTSECRET),
+	}))
 }

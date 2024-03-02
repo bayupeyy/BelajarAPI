@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -200,5 +201,78 @@ func (us *UserController) AddActivity() echo.HandlerFunc {
 		}
 
 		return c.JSON(http.StatusCreated, helper.ResponseFormat(http.StatusCreated, "Berhasil Ditambahkan", nil))
+	}
+}
+
+// Fungsi Controller untuk mengubah kegiatan milik pengguna yang sedang login
+func (us *UserController) UpdateActivity() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Mendapatkan token JWT dari konteks
+		token := c.Get("user").(*jwt.Token)
+
+		// Mendapatkan klaim dari token JWT
+		claims := token.Claims.(jwt.MapClaims)
+
+		// Mendapatkan nomor HP dari klaim
+		hp := claims["hp"].(string)
+
+		// Mendapatkan ID kegiatan yang ingin diubah dari parameter URL
+		activityID := c.Param("id")
+
+		// Konversi activityID menjadi tipe data uint
+		activityIDUint, err := strconv.ParseUint(activityID, 10, 64)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "ID kegiatan tidak valid", nil))
+		}
+
+		// Mendapatkan kegiatan dari database
+		var activity model.Activity
+		if err := us.Model.Connection.Where("id = ? AND hp = ?", activityIDUint, hp).First(&activity).Error; err != nil {
+			return c.JSON(http.StatusNotFound, helper.ResponseFormat(http.StatusNotFound, "Kegiatan tidak ditemukan", nil))
+		}
+
+		// Binding data kegiatan baru yang ingin diubah
+		var updatedActivity model.Activity
+		if err := c.Bind(&updatedActivity); err != nil {
+			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "Gagal memproses permintaan", nil))
+		}
+
+		// Memastikan kegiatan yang ingin diubah dimiliki oleh pengguna yang sedang login
+		if activity.UserID != activity.UserID {
+			return c.JSON(http.StatusForbidden, helper.ResponseFormat(http.StatusForbidden, "Anda tidak memiliki izin untuk mengubah kegiatan ini", nil))
+		}
+
+		// Mengupdate kegiatan dalam database
+		if err := us.Model.Connection.Model(&activity).Updates(&updatedActivity).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, helper.ResponseFormat(http.StatusInternalServerError, "Gagal mengupdate kegiatan", nil))
+		}
+
+		return c.JSON(http.StatusOK, helper.ResponseFormat(http.StatusOK, "Kegiatan berhasil diubah", nil))
+	}
+}
+
+// GetAllActivities mengembalikan daftar kegiatan berdasarkan pengguna yang terautentikasi
+func (us *UserController) GetAllActivities() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Mendapatkan token JWT dari konteks
+		token := c.Get("user").(*jwt.Token)
+
+		// Mendapatkan klaim dari token JWT
+		claims := token.Claims.(jwt.MapClaims)
+
+		// Mendapatkan nomor HP pengguna dari klaim
+		hp := claims["hp"].(string)
+
+		// Mengambil daftar kegiatan berdasarkan nomor HP pengguna
+		activities, err := us.Model.GetActivitiesByHp(hp)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Gagal mengambil daftar kegiatan")
+		}
+
+		// Membuat respons
+		response := helper.ResponseFormat(http.StatusOK, "Daftar kegiatan berhasil diambil", activities)
+
+		// Mengembalikan respons
+		return c.JSON(http.StatusOK, response)
 	}
 }
