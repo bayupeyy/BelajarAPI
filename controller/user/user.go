@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -52,6 +53,11 @@ func (us *UserController) Register() echo.HandlerFunc {
 		processInput.Hp = input.Hp
 		processInput.Nama = input.Nama
 		processInput.Password = input.Password
+
+		//Untuk memeriksa apakah nomoor sudah terdaftar
+		if us.Model.CekUser(processInput.Hp) {
+			return c.JSON(http.StatusConflict, helper.ResponseFormat(http.StatusConflict, "Nomor sudah terdaftar", nil))
+		}
 
 		err = us.Model.AddUser(processInput) // ini adalah fungsi yang kita buat sendiri
 		if err != nil {
@@ -169,5 +175,30 @@ func (us *UserController) Profile() echo.HandlerFunc {
 		}
 		return c.JSON(http.StatusOK,
 			helper.ResponseFormat(http.StatusOK, "berhasil mendapatkan data", result))
+	}
+}
+
+// Fungsi Controller untuk menambah AddActivity
+func (us *UserController) AddActivity() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Mengambil token JWT dari konteks
+		token := c.Get("user").(*jwt.Token)
+
+		// Mengambil claims dari token JWT
+		claims := token.Claims.(jwt.MapClaims)
+
+		// Mengambil nomor HP dari claims
+		hp := claims["hp"].(string)
+
+		var newActivity model.Activity
+		if err := c.Bind(&newActivity); err != nil {
+			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "Gagal memproses permintaan", nil))
+		}
+
+		if err := us.Model.AddActivity(hp, newActivity); err != nil {
+			return c.JSON(http.StatusInternalServerError, helper.ResponseFormat(http.StatusInternalServerError, "Gagal menambahkan", nil))
+		}
+
+		return c.JSON(http.StatusCreated, helper.ResponseFormat(http.StatusCreated, "Berhasil Ditambahkan", nil))
 	}
 }

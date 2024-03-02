@@ -20,4 +20,9 @@ func InitRoute(c *echo.Echo, ctl user.UserController) {
 	c.PUT("/users/:hp", ctl.Update(), echojwt.WithConfig(echojwt.Config{
 		SigningKey: []byte(config.JWTSECRET),
 	})) // update user -> butuh penanda khusus
+
+	//Menambah Kegiatan
+	c.POST("/kegiatan", ctl.AddActivity(), echojwt.WithConfig(echojwt.Config{
+		SigningKey: []byte(config.JWTSECRET),
+	}))
 }

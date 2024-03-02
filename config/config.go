@@ -76,7 +76,7 @@ func InitSQL(c AppConfig) *gorm.DB {
 		return nil
 	}
 
-	db.AutoMigrate(&model.User{})
+	db.AutoMigrate(&model.User{}, &model.Activity{}) //Membuat Tabel dari Struct User dan Activity
 
 	return db
 }
