@@ -15,7 +15,7 @@ type ActivityController interface {
 type ActivityModel interface {
 	InsertActivity(pemilik string, kegiatanBaru Activity) (Activity, error)
 	UpdateActivity(pemilik string, activityID uint, data Activity) (Activity, error)
-	// DeleteTodo()
+	// DeleteActivity()
 	GetActivityByOwner(pemilik string) ([]Activity, error)
 }
 

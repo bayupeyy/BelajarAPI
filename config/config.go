@@ -1,7 +1,8 @@
 package config
 
 import (
-	"21-api/model"
+	activity "21-api/features/activity/data"
+	user "21-api/features/user/data"
 	"fmt"
 	"os"
 
@@ -76,7 +77,7 @@ func InitSQL(c AppConfig) *gorm.DB {
 		return nil
 	}
 
-	db.AutoMigrate(&model.User{}, &model.Activity{}) //Membuat Tabel dari Struct User dan Activity
+	db.AutoMigrate(&user.User{}, &activity.Activity{})
 
 	return db
 }

@@ -11,7 +11,7 @@ type model struct {
 	connection *gorm.DB
 }
 
-func New(db *gorm.DB) activity.activityModel {
+func New(db *gorm.DB) activity.ActivityModel {
 	return &model{
 		connection: db,
 	}
