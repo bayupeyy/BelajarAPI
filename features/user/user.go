@@ -1,278 +1,153 @@
-package user
+package model
 
 import (
-	"21-api/helper"
-	"21-api/middlewares"
-	"21-api/model"
-	"fmt"
-	"log"
-	"net/http"
-	"strconv"
-	"strings"
+	"errors"
 
-	"github.com/go-playground/validator/v10"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
-type UserController struct {
-	Model model.UserModel
+type User struct {
+	ID         uint       `gorm:"primaryKey"`
+	Nama       string     `json:"nama" form:"nama" validate:"required"`
+	Hp         string     `gorm:"uniqueIndex" json:"hp" form:"hp" validate:"required,max=13,min=10"`
+	Password   string     `json:"password" form:"password" validate:"required"`
+	Activities []Activity `gorm:"foreignKey:UserID"`
 }
 
-func (us *UserController) Register() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var input RegisterRequest
-		err := c.Bind(&input)
-		if err != nil {
-			if strings.Contains(err.Error(), "unsupport") {
-				return c.JSON(http.StatusUnsupportedMediaType,
-					helper.ResponseFormat(http.StatusUnsupportedMediaType, "format data tidak didukung", nil))
-			}
-			return c.JSON(http.StatusBadRequest,
-				helper.ResponseFormat(http.StatusBadRequest, "data yang dikirmkan tidak sesuai", nil))
-		}
-
-		validate := validator.New(validator.WithRequiredStructEnabled())
-		err = validate.Struct(input)
-
-		if err != nil {
-			// var message = []string{}
-			// for _, val := range err.(validator.ValidationErrors) {
-			// 	if val.Tag() == "required" {
-			// 		message = append(message, fmt.Sprint(val.Field(), " wajib diisi"))
-			// 	} else if val.Tag() == "min" {
-			// 		message = append(message, fmt.Sprint(val.Field(), " minimal 10 digit"))
-			// 	} else {
-			// 		message = append(message, fmt.Sprint(val.Field(), " ", val.Tag()))
-			// 	}
-			// }
-			return c.JSON(http.StatusBadRequest,
-				helper.ResponseFormat(http.StatusBadRequest, "data yang dikirim kurang sesuai", nil))
-		}
-
-		var processInput model.User
-		processInput.Hp = input.Hp
-		processInput.Nama = input.Nama
-		processInput.Password = input.Password
-
-		//Untuk memeriksa apakah nomoor sudah terdaftar
-		if us.Model.CekUser(processInput.Hp) {
-			return c.JSON(http.StatusConflict, helper.ResponseFormat(http.StatusConflict, "Nomor sudah terdaftar", nil))
-		}
-
-		err = us.Model.AddUser(processInput) // ini adalah fungsi yang kita buat sendiri
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan pada sistem", nil))
-		}
-		return c.JSON(http.StatusCreated,
-			helper.ResponseFormat(http.StatusCreated, "selamat data sudah terdaftar", nil))
-	}
+type Activity struct {
+	ID        uint   `gorm:"primaryKey"`
+	UserID    uint   `json:"user_id"`
+	Kegiatan  string `json:"kegiatan" form:"kegiatan" validate:"required"`
+	Deskripsi string `json:"deskripsi" form:"deskripsi" validate:"required"`
 }
 
-func (us *UserController) Login() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var input LoginRequest
-		err := c.Bind(&input)
-		if err != nil {
-			if strings.Contains(err.Error(), "unsupport") {
-				return c.JSON(http.StatusUnsupportedMediaType,
-					helper.ResponseFormat(http.StatusUnsupportedMediaType, "format data tidak didukung", nil))
-			}
-			return c.JSON(http.StatusBadRequest,
-				helper.ResponseFormat(http.StatusBadRequest, "data yang dikirmkan tidak sesuai", nil))
-		}
-
-		validate := validator.New(validator.WithRequiredStructEnabled())
-		err = validate.Struct(input)
-
-		if err != nil {
-			for _, val := range err.(validator.ValidationErrors) {
-				fmt.Println(val.Error())
-			}
-		}
-
-		result, err := us.Model.Login(input.Hp, input.Password)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan pada sistem", nil))
-		}
-		token, err := middlewares.GenerateJWT(result.Hp)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan pada sistem, gagal memproses data", nil))
-		}
-
-		var responseData LoginResponse
-		responseData.Hp = result.Hp
-		responseData.Nama = result.Nama
-		responseData.Token = token
-
-		return c.JSON(http.StatusOK,
-			helper.ResponseFormat(http.StatusOK, "selamat anda berhasil login", responseData))
-
-	}
+type ActivityResponse struct {
+	ID        uint   `json:"id"`
+	Kegiatan  string `json:"kegiatan"`
+	Deskripsi string `json:"deskripsi"`
 }
 
-func (us *UserController) Update() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var hp = c.Param("hp")
-		var input model.User
-		err := c.Bind(&input)
-		if err != nil {
-			log.Println("masalah baca input:", err.Error())
-			if strings.Contains(err.Error(), "unsupport") {
-				return c.JSON(http.StatusUnsupportedMediaType,
-					helper.ResponseFormat(http.StatusUnsupportedMediaType, "format data tidak didukung", nil))
-			}
-			return c.JSON(http.StatusBadRequest,
-				helper.ResponseFormat(http.StatusBadRequest, "data yang dikirmkan tidak sesuai", nil))
-		}
-
-		isFound := us.Model.CekUser(hp)
-
-		if !isFound {
-			return c.JSON(http.StatusNotFound,
-				helper.ResponseFormat(http.StatusNotFound, "data tidak ditemukan", nil))
-		}
-
-		err = us.Model.Update(hp, input)
-
-		if err != nil {
-			log.Println("masalah database :", err.Error())
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan saat update data", nil))
-		}
-
-		return c.JSON(http.StatusOK,
-			helper.ResponseFormat(http.StatusOK, "data berhasil di update", nil))
-	}
+type UserModel struct {
+	Connection *gorm.DB
 }
 
-func (us *UserController) ListUser() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		listUser, err := us.Model.GetAllUser()
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan pada sistem", nil))
-		}
-		return c.JSON(http.StatusOK,
-			helper.ResponseFormat(http.StatusOK, "berhasil mendapatkan data", listUser))
+func (um *UserModel) AddUser(newData User) error {
+	err := um.Connection.Create(&newData).Error
+	if err != nil {
+		return err
 	}
+
+	return nil
 }
 
-func (us *UserController) Profile() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		var hp = c.Param("hp")
-		result, err := us.Model.GetProfile(hp)
-
-		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				return c.JSON(http.StatusNotFound,
-					helper.ResponseFormat(http.StatusNotFound, "data tidak ditemukan", nil))
-			}
-			return c.JSON(http.StatusInternalServerError,
-				helper.ResponseFormat(http.StatusInternalServerError, "terjadi kesalahan pada sistem", nil))
-		}
-		return c.JSON(http.StatusOK,
-			helper.ResponseFormat(http.StatusOK, "berhasil mendapatkan data", result))
+func (um *UserModel) CekUser(hp string) bool {
+	var data User
+	if err := um.Connection.Where("hp = ?", hp).First(&data).Error; err != nil {
+		return false
 	}
+	return true
 }
 
-// Fungsi Controller untuk menambah AddActivity
-func (us *UserController) AddActivity() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Mengambil token JWT dari konteks
-		token := c.Get("user").(*jwt.Token)
-
-		// Mengambil claims dari token JWT
-		claims := token.Claims.(jwt.MapClaims)
-
-		// Mengambil nomor HP dari claims
-		hp := claims["hp"].(string)
-
-		var newActivity model.Activity
-		if err := c.Bind(&newActivity); err != nil {
-			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "Gagal memproses permintaan", nil))
-		}
-
-		if err := us.Model.AddActivity(hp, newActivity); err != nil {
-			return c.JSON(http.StatusInternalServerError, helper.ResponseFormat(http.StatusInternalServerError, "Gagal menambahkan", nil))
-		}
-
-		return c.JSON(http.StatusCreated, helper.ResponseFormat(http.StatusCreated, "Berhasil Ditambahkan", nil))
+func (um *UserModel) Update(hp string, data User) error {
+	if err := um.Connection.Model(&data).Where("hp = ?", hp).Update("nama", data.Nama).Update("password", data.Password).Error; err != nil {
+		return err
 	}
+	return nil
 }
 
-// Fungsi Controller untuk mengubah kegiatan milik pengguna yang sedang login
-func (us *UserController) UpdateActivity() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Mendapatkan token JWT dari konteks
-		token := c.Get("user").(*jwt.Token)
+func (um *UserModel) GetAllUser() ([]User, error) {
+	var result []User
 
-		// Mendapatkan klaim dari token JWT
-		claims := token.Claims.(jwt.MapClaims)
-
-		// Mendapatkan nomor HP dari klaim
-		hp := claims["hp"].(string)
-
-		// Mendapatkan ID kegiatan yang ingin diubah dari parameter URL
-		activityID := c.Param("id")
-
-		// Konversi activityID menjadi tipe data uint
-		activityIDUint, err := strconv.ParseUint(activityID, 10, 64)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "ID kegiatan tidak valid", nil))
-		}
-
-		// Mendapatkan kegiatan dari database
-		var activity model.Activity
-		if err := us.Model.Connection.Where("id = ? AND hp = ?", activityIDUint, hp).First(&activity).Error; err != nil {
-			return c.JSON(http.StatusNotFound, helper.ResponseFormat(http.StatusNotFound, "Kegiatan tidak ditemukan", nil))
-		}
-
-		// Binding data kegiatan baru yang ingin diubah
-		var updatedActivity model.Activity
-		if err := c.Bind(&updatedActivity); err != nil {
-			return c.JSON(http.StatusBadRequest, helper.ResponseFormat(http.StatusBadRequest, "Gagal memproses permintaan", nil))
-		}
-
-		// Memastikan kegiatan yang ingin diubah dimiliki oleh pengguna yang sedang login
-		if activity.UserID != activity.UserID {
-			return c.JSON(http.StatusForbidden, helper.ResponseFormat(http.StatusForbidden, "Anda tidak memiliki izin untuk mengubah kegiatan ini", nil))
-		}
-
-		// Mengupdate kegiatan dalam database
-		if err := us.Model.Connection.Model(&activity).Updates(&updatedActivity).Error; err != nil {
-			return c.JSON(http.StatusInternalServerError, helper.ResponseFormat(http.StatusInternalServerError, "Gagal mengupdate kegiatan", nil))
-		}
-
-		return c.JSON(http.StatusOK, helper.ResponseFormat(http.StatusOK, "Kegiatan berhasil diubah", nil))
+	if err := um.Connection.Find(&result).Error; err != nil {
+		return nil, err
 	}
+
+	return result, nil
 }
 
-// GetAllActivities mengembalikan daftar kegiatan berdasarkan pengguna yang terautentikasi
-func (us *UserController) GetAllActivities() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		// Mendapatkan token JWT dari konteks
-		token := c.Get("user").(*jwt.Token)
-
-		// Mendapatkan klaim dari token JWT
-		claims := token.Claims.(jwt.MapClaims)
-
-		// Mendapatkan nomor HP pengguna dari klaim
-		hp := claims["hp"].(string)
-
-		// Mengambil daftar kegiatan berdasarkan nomor HP pengguna
-		activities, err := us.Model.GetActivitiesByHp(hp)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Gagal mengambil daftar kegiatan")
-		}
-
-		// Membuat respons
-		response := helper.ResponseFormat(http.StatusOK, "Daftar kegiatan berhasil diambil", activities)
-
-		// Mengembalikan respons
-		return c.JSON(http.StatusOK, response)
+func (um *UserModel) GetProfile(hp string) (User, error) {
+	var result User
+	if err := um.Connection.Where("hp = ?", hp).First(&result).Error; err != nil {
+		return User{}, err
 	}
+	return result, nil
+}
+
+func (um *UserModel) Login(hp string, password string) (User, error) {
+	var result User
+	if err := um.Connection.Where("hp = ? AND password = ?", hp, password).First(&result).Error; err != nil {
+		return User{}, err
+	}
+	return result, nil
+}
+
+// Fungsi untuk menambah kegiatan
+func (um *UserModel) AddActivity(hp string, activity Activity) error {
+	//Mendapatkan pengguna berdasarkan No Hp
+	var user User
+	if err := um.Connection.Where("hp = ?", hp).First(&user).Error; err != nil {
+		return err
+	}
+
+	//Set no Hp pengguna untuk kegiatan yang akan ditambahkan
+	activity.UserID = user.ID
+
+	//Menambahkan ke dalam DB
+	if err := um.Connection.Create(&activity).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UpdateActivity mengubah kegiatan yang dimiliki oleh pengguna yang sedang login
+func (um *UserModel) UpdateActivity(userID uint, activityID uint, updatedActivity Activity) error {
+	// Mencari kegiatan berdasarkan ID
+	var activity Activity
+	if err := um.Connection.Where("id = ? AND user_id = ?", activityID, userID).First(&activity).Error; err != nil {
+		return err
+	}
+
+	// Memastikan kegiatan yang ingin diubah dimiliki oleh pengguna yang sedang login
+	if activity.UserID != userID {
+		return errors.New("Anda tidak memiliki izin untuk mengubah kegiatan ini")
+	}
+
+	// Memperbarui kegiatan yang ditemukan
+	if err := um.Connection.Model(&activity).Updates(&updatedActivity).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetActivitiesByHp mengambil daftar kegiatan berdasarkan nomor HP pengguna
+func (um *UserModel) GetActivitiesByHp(hp string) ([]ActivityResponse, error) {
+	var activities []Activity
+
+	// Mendapatkan pengguna berdasarkan nomor HP
+	var user User
+	if err := um.Connection.Where("hp = ?", hp).First(&user).Error; err != nil {
+		return nil, err
+	}
+
+	// Mengambil daftar kegiatan berdasarkan ID pengguna
+	if err := um.Connection.Model(&user).Association("Activities").Find(&activities); err != nil {
+		return nil, err
+	}
+
+	// Membuat slice untuk menyimpan respons kegiatan
+	var activityResponses []ActivityResponse
+
+	// Mengonversi setiap kegiatan menjadi respons kegiatan yang diinginkan
+	for _, activity := range activities {
+		activityResponse := ActivityResponse{
+			ID:        activity.ID,
+			Kegiatan:  activity.Kegiatan,
+			Deskripsi: activity.Deskripsi,
+		}
+		activityResponses = append(activityResponses, activityResponse)
+	}
+
+	return activityResponses, nil
 }
