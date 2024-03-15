@@ -1,0 +1,99 @@
+openapi: 3.0.0
+info:
+  title: API Kegiatan
+  description: API untuk mengelola kegiatan
+  version: 1.0.0
+servers:
+  - url: http://localhost:1323
+paths:
+  /kegiatan:
+    post:
+      summary: Menambahkan kegiatan baru
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kegiatan:
+                  type: string
+                  description: Nama kegiatan yang akan ditambahkan
+              required:
+                - kegiatan
+      responses:
+        '201':
+          description: Kegiatan berhasil ditambahkan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Pesan konfirmasi
+                  data:
+                    type: object
+                    description: Detail kegiatan yang ditambahkan
+                    properties:
+                      id:
+                        type: integer
+                        format: int64
+                        description: ID kegiatan yang ditambahkan
+                      kegiatan:
+                        type: string
+                        description: Nama kegiatan
+        '400':
+          description: Permintaan tidak valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Pesan kesalahan
+    get:
+      summary: Mengambil daftar kegiatan
+      responses:
+        '200':
+          description: Daftar kegiatan berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Pesan konfirmasi
+                  data:
+                    type: array
+                    description: Daftar kegiatan
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+                          description: ID kegiatan
+                        kegiatan:
+                          type: string
+                          description: Nama kegiatan
+        '500':
+          description: Terjadi kesalahan saat mengambil daftar kegiatan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Pesan kesalahan
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Pesan kesalahan
